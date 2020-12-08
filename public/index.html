@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Forge Model Viewer</title>
+    <meta charset="utf-8" />
+    <meta name="description" content="Demonstration purposes only." />
+    <meta name="author" content="Shyan Chien - WSP" />
+    <link
+      rel="shortcut icon"
+      href="https://github.com/Autodesk-Forge/learn.forge.viewmodels/raw/master/img/favicon.ico"
+    />
+    <!-- Common packages: jQuery, Bootstrap, jsTree -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.7/jstree.min.js"></script>
+
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.7/themes/default/style.min.css"
+    />
+    <!-- Autodesk Forge Viewer files -->
+    <link
+      rel="stylesheet"
+      href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css"
+      type="text/css"
+    />
+    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+
+    <!-- this project files -->
+    <!-- <link href="main.css" rel="stylesheet" /> -->
+    <style>
+      html {
+        min-height: 100%;
+        height: 100%;
+      }
+      body {
+        min-height: 100%;
+        height: 100%;
+      }
+
+      .fill {
+        height: calc(100vh - 100px);
+      }
+
+      body {
+        padding-top: 20px;
+        margin-right: 30px;
+      }
+
+      #appBuckets {
+        overflow: auto;
+        width: 100%;
+        height: calc(100vh - 150px);
+      }
+
+      #forgeViewer {
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container-fluid fill">
+      <div class="row fill">
+        <div class="col-sm-3 fill">
+          <div class="panel panel-default fill">
+            <div class="panel-heading">Buckets &amp; Objects</div>
+            <div id="appBuckets">tree here</div>
+          </div>
+        </div>
+        <div class="col-sm-9 fill">
+          <div id="forgeViewer"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      var viewer;
+
+      function launchViewer(urn) {
+        var options = {
+          env: 'MD20ProdUS',
+          api: 'D3S',
+          getAccessToken: getForgeToken,
+        };
+
+        Autodesk.Viewing.Initializer(options, () => {
+          viewer = new Autodesk.Viewing.GuiViewer3D(
+            document.getElementById('forgeViewer')
+          );
+          viewer.start();
+          var documentId = 'urn:' + urn;
+          Autodesk.Viewing.Document.load(
+            documentId,
+            onDocumentLoadSuccess,
+            onDocumentLoadFailure
+          );
+        });
+      }
+
+      function onDocumentLoadSuccess(doc) {
+        var viewables = doc.getRoot().getDefaultGeometry();
+        viewer.loadDocumentNode(doc, viewables).then((i) => {
+          // documented loaded, any action?
+        });
+      }
+
+      function onDocumentLoadFailure(viewerErrorCode) {
+        console.error('onDocumentLoadFailure() - errorCode:' + viewerErrorCode);
+      }
+
+      function getForgeToken(callback) {
+        fetch(
+          'https://wsp-internal-forge.herokuapp.com/api/forge/oauth/token'
+        ).then((res) => {
+          res.json().then((data) => {
+            console.log(data.access_token);
+            callback(data.access_token, data.expires_in);
+          });
+        });
+      }
+    </script>
+    <script>
+      $(document).ready(function () {
+        prepareAppBucketTree();
+        $('#refreshBuckets').click(function () {
+          $('#appBuckets').jstree(true).refresh();
+        });
+      });
+
+      function prepareAppBucketTree() {
+        $('#appBuckets')
+          .jstree({
+            core: {
+              themes: { icons: true },
+              data: {
+                url:
+                  'https://wsp-internal-forge.herokuapp.com/api/forge/oss/bucketTree',
+
+                dataType: 'json',
+                multiple: false,
+                data: function (node) {
+                  return { id: node.id };
+                },
+              },
+            },
+            types: {
+              default: {
+                icon: 'glyphicon glyphicon-question-sign',
+              },
+              '#': {
+                icon: 'glyphicon glyphicon-cloud',
+              },
+              bucket: {
+                icon: 'glyphicon glyphicon-folder-open',
+              },
+              object: {
+                icon: 'glyphicon glyphicon-file',
+              },
+            },
+            plugins: ['types', 'state', 'sort', 'contextmenu'],
+          })
+          .on('loaded.jstree', function () {
+            $('#appBuckets').jstree('open_all');
+          })
+          .bind('activate_node.jstree', function (evt, data) {
+            if (
+              data != null &&
+              data.node != null &&
+              data.node.type == 'object'
+            ) {
+              $('#forgeViewer').empty();
+              var urn = data.node.id;
+              launchViewer(urn);
+            }
+          });
+      }
+    </script>
+  </body>
+</html>
